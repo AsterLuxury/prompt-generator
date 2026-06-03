@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JEWEL SHOT — AI Prompt Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Cinzel:wght@400;500&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --gold: #C9A84C;
+      --gold-light: #F5D98B;
+      --gold-dim: #7a6028;
+      --bg: #07060400;
+      --surface: #0d0b07;
+      --surface2: #131009;
+      --border: #2a2416;
+      --border-dim: #1a1610;
+      --text: #e8e0d0;
+      --text-dim: #9a8a70;
+      --text-faint: #5a4e38;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-height: 100vh;
+      background: #070604;
+      color: var(--text);
+      font-family: 'EB Garamond', serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ── Ambient background ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 15% 10%, rgba(201,168,76,.07) 0%, transparent 55%),
+        radial-gradient(ellipse 60% 40% at 85% 85%, rgba(139,92,246,.05) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 60% at 50% 50%, rgba(201,168,76,.03) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Grain ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: -50%;
+      width: 200%;
+      height: 200%;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      opacity: .025;
+      pointer-events: none;
+      z-index: 0;
+      animation: grain .4s steps(1) infinite;
+    }
+
+    @keyframes grain {
+      0%,100%{transform:translate(0,0)}10%{transform:translate(-1%,-1%)}20%{transform:translate(1%,1%)}
+      30%{transform:translate(-1%,1%)}40%{transform:translate(1%,-1%)}50%{transform:translate(-1%,0)}
+      60%{transform:translate(1%,0)}70%{transform:translate(0,-1%)}80%{transform:translate(0,1%)}
+      90%{transform:translate(-1%,-1%)}
+    }
+
+    /* ── Layout ── */
+    .wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 24px 100px;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      padding: 64px 0 48px;
+    }
+
+    .header-eyebrow {
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: .5em;
+      color: var(--gold-dim);
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .header-title {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(36px, 9vw, 68px);
+      font-weight: 400;
+      letter-spacing: .08em;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .header-title span {
+      background: linear-gradient(90deg, #C9A84C 0%, #F5D98B 40%, #C9A84C 70%, #F5D98B 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shimmer 4s linear infinite;
+    }
+
+    @keyframes shimmer {
+      from { background-position: 0% center; }
+      to   { background-position: 200% center; }
+    }
+
+    .header-sub {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 15px;
+      color: var(--text-faint);
+      letter-spacing: .12em;
+      margin-top: 12px;
+      font-style: italic;
+    }
+
+    .header-rule {
+      width: 80px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+      margin: 24px auto 0;
+    }
+
+    /* ── API Key section ── */
+    .api-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px 22px;
+      margin-bottom: 20px;
+    }
+
+    .api-label {
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: .3em;
+      color: var(--gold-dim);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .api-label-badge {
+      font-family: 'EB Garamond', serif;
+      font-size: 10px;
+      letter-spacing: .05em;
+      background: rgba(201,168,76,.1);
+      color: var(--gold);
+      padding: 2px 8px;
+      border-radius: 20px;
+      text-transform: none;
+    }
+
+    .api-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .api-input {
+      flex: 1;
+      background: #0a0805;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 11px 14px;
+      color: var(--text);
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      letter-spacing: .04em;
+      outline: none;
+      transition: border-color .2s;
+    }
+
+    .api-input:focus { border-color: var(--gold-dim); }
+    .api-input::placeholder { color: var(--text-faint); }
+
+    .api-save-btn {
+      background: rgba(201,168,76,.08);
+      border: 1px solid var(--gold-dim);
+      border-radius: 9px;
+      padding: 11px 18px;
+      color: var(--gold);
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all .2s;
+      white-space: nowrap;
+    }
+
+    .api-save-btn:hover { background: rgba(201,168,76,.15); }
+    .api-save-btn.saved { background: var(--gold); color: #070604; }
+
+    .api-hint {
+      font-size: 11.5px;
+      color: var(--text-faint);
+      margin-top: 9px;
+      font-style: italic;
+      line-height: 1.5;
+    }
+
+    .api-hint a {
+      color: var(--gold-dim);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(201,168,76,.3);
+    }
+
+    .api-hint a:hover { color: var(--gold); }
+
+    /* ── Upload zone ── */
+    .upload-zone {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--surface);
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all .25s;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.drag-over {
+      border-color: var(--gold-dim);
+      background: rgba(201,168,76,.04);
+    }
+
+    .upload-zone.has-image {
+      cursor: default;
+      min-height: unset;
+    }
+
+    .upload-placeholder {
+      text-align: center;
+      padding: 40px 24px;
+      pointer-events: none;
+    }
+
+    .upload-icon {
+      font-size: 42px;
+      margin-bottom: 14px;
+      opacity: .35;
+      line-height: 1;
+    }
+
+    .upload-main {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 17px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      letter-spacing: .05em;
+    }
+
+    .upload-sub {
+      font-size: 12px;
+      color: var(--text-faint);
+      letter-spacing: .08em;
+    }
+
+    .upload-file-input {
+      display: none;
+    }
+
+    .preview-wrap {
+      position: relative;
+      width: 100%;
+    }
+
+    .preview-img {
+      width: 100%;
+      max-height: 340px;
+      object-fit: contain;
+      display: block;
+      background: #0a0805;
+    }
+
+    .preview-change-btn {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(7,6,4,.75);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      border-radius: 8px;
+      padding: 6px 13px;
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      transition: all .2s;
+    }
+
+    .preview-change-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+
+    /* ── Generate btn ── */
+    .generate-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #1a1408, #251c0e);
+      border: 1px solid var(--gold);
+      border-radius: 12px;
+      padding: 20px;
+      color: var(--gold-light);
+      font-family: 'Cinzel', serif;
+      font-size: 12px;
+      letter-spacing: .35em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all .25s;
+      margin-bottom: 28px;
+      box-shadow: 0 0 40px rgba(201,168,76,.08);
+    }
+
+    .generate-btn:hover:not(:disabled) {
+      box-shadow: 0 0 60px rgba(201,168,76,.2);
+      transform: translateY(-1px);
+    }
+
+    .generate-btn:disabled {
+      opacity: .4;
+      cursor: not-allowed;
+    }
+
+    /* ── Loading ── */
+    .loading-box {
+      text-align: center;
+      padding: 52px 24px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      margin-bottom: 28px;
+    }
+
+    .spinner {
+      width: 38px;
+      height: 38px;
+      border: 2px solid var(--border);
+      border-top: 2px solid var(--gold);
+      border-radius: 50%;
+      margin: 0 auto 20px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-title {
+      font-family: 'Cinzel', serif;
+      font-size: 11px;
+      letter-spacing: .35em;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .loading-sub {
+      font-size: 13px;
+      color: var(--text-faint);
+      font-style: italic;
+    }
+
+    /* ── Error ── */
+    .error-box {
+      background: rgba(239,68,68,.07);
+      border: 1px solid rgba(239,68,68,.25);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      color: #fca5a5;
+      font-size: 13.5px;
+      font-style: italic;
+    }
+
+    /* ── Results header ── */
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .results-title {
+      font-family: 'Cinzel', serif;
+      font-size: 11px;
+      letter-spacing: .3em;
+      color: var(--gold-dim);
+      text-transform: uppercase;
+    }
+
+    .results-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .action-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      color: var(--text-faint);
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all .2s;
+    }
+
+    .action-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+    .action-btn.gold { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,.06); }
+    .action-btn.gold:hover { background: rgba(201,168,76,.15); }
+    .action-btn.gold.active { background: var(--gold); color: #070604; border-color: var(--gold); }
+
+    /* ── Prompt cards ── */
+    .cards {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .card {
+      border-radius: 14px;
+      padding: 22px;
+      border: 1px solid transparent;
+      transition: box-shadow .25s;
+      animation: fadeUp .45s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .card:hover { box-shadow: 0 0 40px rgba(201,168,76,.07); }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .card-meta { flex: 1; }
+
+    .card-mood {
+      font-family: 'Cinzel', serif;
+      font-size: 9.5px;
+      letter-spacing: .3em;
+      text-transform: uppercase;
+      font-weight: 500;
+      margin-bottom: 5px;
+    }
+
+    .card-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 20px;
+      font-weight: 500;
+      color: #f0e8d8;
+      letter-spacing: .03em;
+      line-height: 1.15;
+      margin-bottom: 4px;
+    }
+
+    .card-best-for {
+      font-size: 12px;
+      font-style: italic;
+      color: var(--text-faint);
+      letter-spacing: .04em;
+    }
+
+    .copy-btn {
+      border-radius: 8px;
+      padding: 9px 16px;
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all .2s;
+      white-space: nowrap;
+      flex-shrink: 0;
+      font-weight: 600;
+    }
+
+    .card-divider {
+      height: 1px;
+      margin-bottom: 14px;
+    }
+
+    .card-prompt {
+      font-size: 14px;
+      line-height: 1.85;
+      color: #a89878;
+      letter-spacing: .01em;
+    }
+
+    /* ── Golden rule ── */
+    .golden-rule {
+      margin-top: 28px;
+      padding: 20px 22px;
+      background: rgba(201,168,76,.04);
+      border: 1px solid rgba(201,168,76,.12);
+      border-radius: 12px;
+      text-align: center;
+    }
+
+    .golden-rule-label {
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: .35em;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      margin-bottom: 9px;
+    }
+
+    .golden-rule-text {
+      font-size: 14px;
+      color: var(--text-faint);
+      font-style: italic;
+      line-height: 1.7;
+    }
+
+    .golden-rule-text em {
+      color: var(--gold);
+      font-style: normal;
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 40px 0 0;
+      border-top: 1px solid var(--border-dim);
+      margin-top: 60px;
+    }
+
+    .footer-text {
+      font-size: 12px;
+      color: var(--text-faint);
+      font-style: italic;
+      letter-spacing: .06em;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 540px) {
+      .wrap { padding: 0 16px 80px; }
+      header { padding: 44px 0 36px; }
+      .api-row { flex-direction: column; }
+      .results-header { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- ── Header ── -->
+    <header>
+      <p class="header-eyebrow">AI Image Prompt Studio</p>
+      <h1 class="header-title">JEWEL<span> SHOT</span></h1>
+      <p class="header-sub">Upload your piece · Receive cinematic prompts in seconds</p>
+      <div class="header-rule"></div>
+    </header>
+
+    <!-- ── API Key ── -->
+    <div class="api-section" id="apiSection">
+      <div class="api-label">
+        Anthropic API Key
+        <span class="api-label-badge">Stored locally in your browser</span>
+      </div>
+      <div class="api-row">
+        <input
+          type="password"
+          class="api-input"
+          id="apiKeyInput"
+          placeholder="sk-ant-api03-..."
+          autocomplete="off"
+        />
+        <button class="api-save-btn" id="apiSaveBtn" onclick="saveKey()">Save</button>
+      </div>
+      <p class="api-hint">
+        Your key never leaves your browser. Get one at
+        <a href="https://console.anthropic.com/account/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
+        It is saved in <code style="font-size:10px;color:var(--gold-dim)">localStorage</code> so you only need to enter it once.
+      </p>
+    </div>
+
+    <!-- ── Upload ── -->
+    <div
+      class="upload-zone"
+      id="uploadZone"
+      onclick="handleZoneClick()"
+      ondragover="handleDragOver(event)"
+      ondragleave="handleDragLeave(event)"
+      ondrop="handleDrop(event)"
+    >
+      <div class="upload-placeholder" id="uploadPlaceholder">
+        <div class="upload-icon">◇</div>
+        <p class="upload-main">Drop your jewelry photo here</p>
+        <p class="upload-sub">or click to browse · JPG, PNG, WEBP</p>
+      </div>
+      <div class="preview-wrap" id="previewWrap" style="display:none">
+        <img id="previewImg" class="preview-img" alt="Jewelry preview" />
+        <button class="preview-change-btn" onclick="changeImage(event)">Change</button>
+      </div>
+    </div>
+    <input type="file" id="fileInput" class="upload-file-input" accept="image/*" onchange="onFileSelected(event)" />
+
+    <!-- ── Generate ── -->
+    <button class="generate-btn" id="generateBtn" onclick="generate()" disabled>
+      ✦ &nbsp; Generate WOW Prompts &nbsp; ✦
+    </button>
+
+    <!-- ── Error ── -->
+    <div class="error-box" id="errorBox" style="display:none"></div>
+
+    <!-- ── Loading ── -->
+    <div class="loading-box" id="loadingBox" style="display:none">
+      <div class="spinner"></div>
+      <p class="loading-title">Analyzing your piece</p>
+      <p class="loading-sub">Crafting 6 cinematic prompts tailored to your jewelry…</p>
+    </div>
+
+    <!-- ── Results ── -->
+    <div id="results" style="display:none">
+      <div class="results-header">
+        <span class="results-title">6 Prompts Ready</span>
+        <div class="results-actions">
+          <button class="action-btn" onclick="regenerate()">↺ &nbsp;Redo</button>
+          <button class="action-btn gold" id="copyAllBtn" onclick="copyAll()">Copy All 6</button>
+        </div>
+      </div>
+      <div class="cards" id="cardsContainer"></div>
+      <div class="golden-rule">
+        <p class="golden-rule-label">The Golden Rule</p>
+        <p class="golden-rule-text">
+          Every prompt ends with the fidelity lock —<br>
+          <em>"The jewelry must match the uploaded reference EXACTLY."</em><br>
+          This prevents GPT Image 2 and Nano Banana Pro from redesigning your piece.
+        </p>
+      </div>
+    </div>
+
+    <footer>
+      <p class="footer-text">JEWEL SHOT · AI Prompt Studio · Powered by Claude</p>
+    </footer>
+
+  </div>
+
+  <script>
+    // ── Mood palette ──────────────────────────────────────────────
+    const MOODS = {
+      golden:    { color: '#C9A84C', bg: 'rgba(201,168,76,0.07)',   border: 'rgba(201,168,76,0.18)' },
+      dramatic:  { color: '#8B5CF6', bg: 'rgba(139,92,246,0.07)',  border: 'rgba(139,92,246,0.18)' },
+      editorial: { color: '#EC4899', bg: 'rgba(236,72,153,0.07)',  border: 'rgba(236,72,153,0.18)' },
+      nature:    { color: '#10B981', bg: 'rgba(16,185,129,0.07)',   border: 'rgba(16,185,129,0.18)' },
+      story:     { color: '#F97316', bg: 'rgba(249,115,22,0.07)',   border: 'rgba(249,115,22,0.18)'  },
+      surreal:   { color: '#06B6D4', bg: 'rgba(6,182,212,0.07)',    border: 'rgba(6,182,212,0.18)'  },
+    };
+
+    function getMoodStyle(mood = '') {
+      const m = mood.toLowerCase();
+      for (const [key, val] of Object.entries(MOODS)) {
+        if (m.includes(key)) return val;
+      }
+      return MOODS.golden;
+    }
+
+    // ── State ─────────────────────────────────────────────────────
+    let imageBase64 = null;
+    let imageMime   = 'image/jpeg';
+    let promptsData = [];
+
+    // ── API Key ───────────────────────────────────────────────────
+    window.addEventListener('DOMContentLoaded', () => {
+      const saved = localStorage.getItem('js_api_key');
+      if (saved) {
+        document.getElementById('apiKeyInput').value = saved;
+        checkReady();
+      }
+    });
+
+    function saveKey() {
+      const key = document.getElementById('apiKeyInput').value.trim();
+      if (!key) return;
+      localStorage.setItem('js_api_key', key);
+      const btn = document.getElementById('apiSaveBtn');
+      btn.textContent = '✓ Saved';
+      btn.classList.add('saved');
+      setTimeout(() => { btn.textContent = 'Save'; btn.classList.remove('saved'); }, 2000);
+      checkReady();
+    }
+
+    function getKey() {
+      return (document.getElementById('apiKeyInput').value.trim()
+        || localStorage.getItem('js_api_key')
+        || '');
+    }
+
+    // ── Upload ────────────────────────────────────────────────────
+    function handleZoneClick() {
+      if (!imageBase64) document.getElementById('fileInput').click();
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      document.getElementById('uploadZone').classList.add('drag-over');
+    }
+
+    function handleDragLeave(e) {
+      document.getElementById('uploadZone').classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      document.getElementById('uploadZone').classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) processFile(file);
+    }
+
+    function onFileSelected(e) {
+      const file = e.target.files[0];
+      if (file) processFile(file);
+    }
+
+    function changeImage(e) {
+      e.stopPropagation();
+      imageBase64 = null;
+      promptsData = [];
+      document.getElementById('uploadZone').classList.remove('has-image');
+      document.getElementById('uploadPlaceholder').style.display = '';
+      document.getElementById('previewWrap').style.display = 'none';
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('errorBox').style.display = 'none';
+      document.getElementById('fileInput').value = '';
+      checkReady();
+    }
+
+    function processFile(file) {
+      imageMime = file.type || 'image/jpeg';
+      const url = URL.createObjectURL(file);
+      document.getElementById('previewImg').src = url;
+      document.getElementById('uploadPlaceholder').style.display = 'none';
+      document.getElementById('previewWrap').style.display = '';
+      document.getElementById('uploadZone').classList.add('has-image');
+      document.getElementById('results').style.display = 'none';
+      document.getElementById('errorBox').style.display = 'none';
+      promptsData = [];
+
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        imageBase64 = ev.target.result.split(',')[1];
+        checkReady();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function checkReady() {
+      const ready = !!imageBase64 && !!getKey();
+      document.getElementById('generateBtn').disabled = !ready;
+    }
+
+    // ── Generate ──────────────────────────────────────────────────
+    const SYSTEM_PROMPT = `You are a world-class luxury jewelry photography director and AI prompt engineer.
+Your task: analyze the uploaded jewelry image and write exactly 6 hyper-detailed, cinematic prompts for AI image generators (GPT Image 2, Nano Banana Pro) that produce WOW-factor lifestyle shots clients will immediately want to buy.
+
+First, silently observe:
+- TYPE (ring, necklace, bracelet, earrings, pendant, etc.)
+- METAL (gold, rose gold, yellow gold, white gold, silver, etc. — note tone)
+- STONES (diamonds, rubies, emeralds, sapphires, pearls, no stones, etc.)
+- STYLE (minimalist, ornate, vintage, art deco, modern, delicate, bold, layered)
+- SCALE (dainty and delicate vs large statement piece)
+
+Then generate 6 prompts, one per scene/mood, each 90–140 words, ultra-specific to the ACTUAL piece in the image.
+
+Moods to cover (in this order):
+1. Golden – warm golden-hour lifestyle, person wearing the jewelry
+2. Dramatic – dark studio hero shot, product only
+3. Editorial – high-fashion editorial, model context
+4. Nature – organic textures: flowers, marble, sand, stone
+5. Story – cinematic emotional narrative moment
+6. Surreal – dreamlike, artistic, unexpected luxury setting
+
+CRITICAL RULES:
+- Reference the actual metal color, stone color/type, and style throughout every prompt
+- Every prompt MUST end with this exact sentence: "The jewelry must match the uploaded reference image EXACTLY — same design, same metal color, same stones, same proportions. Do not alter the piece in any way."
+- Respond ONLY with a valid JSON array. Zero preamble, zero markdown fences, zero explanation.
+
+JSON shape:
+[
+  {
+    "title": "3–5 word evocative title",
+    "mood": "one of: Golden / Dramatic / Editorial / Nature / Story / Surreal",
+    "bestFor": "one sentence on why this scene works for this specific piece",
+    "prompt": "full prompt text ending with the fidelity lock sentence"
+  }
+]`;
+
+    async function generate() {
+      const key = getKey();
+      if (!key) { showError('Please enter your Anthropic API key above.'); return; }
+      if (!imageBase64) { showError('Please upload a jewelry image first.'); return; }
+
+      setLoading(true);
+      hideError();
+      document.getElementById('results').style.display = 'none';
+
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': key,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 3000,
+            system: SYSTEM_PROMPT,
+            messages: [{
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: imageMime, data: imageBase64 }
+                },
+                {
+                  type: 'text',
+                  text: 'Analyze this jewelry carefully and return the 6 tailored prompts as pure JSON only.'
+                }
+              ]
+            }]
+          })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error?.message || `API error ${res.status}`);
+        }
+
+        const data = await res.json();
+        const raw  = data.content?.map(b => b.text || '').join('') || '';
+        const clean = raw.replace(/```json|```/g, '').trim();
+        promptsData = JSON.parse(clean);
+        renderCards(promptsData);
+
+      } catch (err) {
+        showError(err.message || 'Something went wrong. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    function regenerate() { generate(); }
+
+    // ── Render ────────────────────────────────────────────────────
+    function renderCards(prompts) {
+      const container = document.getElementById('cardsContainer');
+      container.innerHTML = '';
+
+      prompts.forEach((p, i) => {
+        const ms = getMoodStyle(p.mood);
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.style.cssText = `
+          background: ${ms.bg};
+          border-color: ${ms.border};
+          animation-delay: ${i * 0.07}s;
+        `;
+        card.innerHTML = `
+          <div class="card-header">
+            <div class="card-meta">
+              <div class="card-mood" style="color:${ms.color}">${p.mood || ''} &nbsp;·&nbsp; 0${i+1}</div>
+              <div class="card-title">${escHtml(p.title || '')}</div>
+              ${p.bestFor ? `<div class="card-best-for">${escHtml(p.bestFor)}</div>` : ''}
+            </div>
+            <button
+              class="copy-btn"
+              id="copyBtn-${i}"
+              style="background:transparent;border:1px solid ${ms.color};color:${ms.color};"
+              onclick="copyPrompt(${i})"
+            >Copy</button>
+          </div>
+          <div class="card-divider" style="background:${ms.color}20"></div>
+          <div class="card-prompt">${escHtml(p.prompt || '')}</div>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById('results').style.display = '';
+      document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // ── Copy helpers ──────────────────────────────────────────────
+    function copyPrompt(i) {
+      const text = promptsData[i]?.prompt || '';
+      navigator.clipboard.writeText(text);
+      const btn = document.getElementById(`copyBtn-${i}`);
+      const ms  = getMoodStyle(promptsData[i]?.mood);
+      const original = btn.textContent;
+      btn.textContent = '✓ Copied';
+      btn.style.background = ms.color;
+      btn.style.color = '#070604';
+      setTimeout(() => {
+        btn.textContent = original;
+        btn.style.background = 'transparent';
+        btn.style.color = ms.color;
+      }, 2000);
+    }
+
+    function copyAll() {
+      const all = promptsData
+        .map((p, i) => `── PROMPT ${i+1}: ${p.title} (${p.mood}) ──\n${p.prompt}`)
+        .join('\n\n');
+      navigator.clipboard.writeText(all);
+      const btn = document.getElementById('copyAllBtn');
+      btn.textContent = '✓ All Copied!';
+      btn.classList.add('active');
+      setTimeout(() => { btn.textContent = 'Copy All 6'; btn.classList.remove('active'); }, 2200);
+    }
+
+    // ── UI helpers ────────────────────────────────────────────────
+    function setLoading(on) {
+      document.getElementById('loadingBox').style.display = on ? '' : 'none';
+      document.getElementById('generateBtn').disabled = on;
+    }
+
+    function showError(msg) {
+      const box = document.getElementById('errorBox');
+      box.textContent = msg;
+      box.style.display = '';
+    }
+
+    function hideError() {
+      document.getElementById('errorBox').style.display = 'none';
+    }
+
+    function escHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // Allow typing in API key field with Enter
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('apiKeyInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter') saveKey();
+      });
+    });
+  </script>
+</body>
+</html>
