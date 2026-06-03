@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JEWEL SHOT — AI Prompt Studio</title>
+  <title>JEWEL SHOT — NVIDIA AI Prompt Studio</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Cinzel:wght@400;500&family=EB+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet" />
@@ -219,6 +219,50 @@
     }
 
     .api-hint a:hover { color: var(--gold); }
+
+    /* ── Model selector ── */
+    .model-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 22px;
+      margin-bottom: 20px;
+    }
+
+    .model-label {
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: .3em;
+      color: var(--gold-dim);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .model-select {
+      width: 100%;
+      background: #0a0805;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 11px 14px;
+      color: var(--text);
+      font-family: 'EB Garamond', serif;
+      font-size: 14px;
+      letter-spacing: .03em;
+      outline: none;
+      cursor: pointer;
+      transition: border-color .2s;
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--gold-dim) 50%), linear-gradient(135deg, var(--gold-dim) 50%, transparent 50%);
+      background-position: calc(100% - 20px) calc(1em + 2px), calc(100% - 15px) calc(1em + 2px);
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
+
+    .model-select:focus { border-color: var(--gold-dim); }
+    .model-select option { background: #0d0b07; color: var(--text); }
 
     /* ── Upload zone ── */
     .upload-zone {
@@ -579,26 +623,40 @@
       <div class="header-rule"></div>
     </header>
 
-    <!-- ── API Key ── -->
+    <!-- ── Model selector ── -->
+    <div class="model-section" id="modelSection">
+      <div class="model-label">
+        NVIDIA Vision Model
+        <span class="api-label-badge">Free endpoints</span>
+      </div>
+      <select class="model-select" id="modelSelect" onchange="saveModel()">
+        <option value="meta/llama-3.2-90b-vision-instruct">Llama 3.2 90B Vision — best quality (default)</option>
+        <option value="meta/llama-3.2-11b-vision-instruct">Llama 3.2 11B Vision — faster</option>
+        <option value="microsoft/phi-3.5-vision-instruct">Phi-3.5 Vision — lightweight</option>
+      </select>
+    </div>
+
+    <!-- ── API Key (optional) ── -->
     <div class="api-section" id="apiSection">
       <div class="api-label">
-        Anthropic API Key
-        <span class="api-label-badge">Stored locally in your browser</span>
+        NVIDIA API Key
+        <span class="api-label-badge">Optional if set on the server</span>
       </div>
       <div class="api-row">
         <input
           type="password"
           class="api-input"
           id="apiKeyInput"
-          placeholder="sk-ant-api03-..."
+          placeholder="nvapi-..."
           autocomplete="off"
         />
         <button class="api-save-btn" id="apiSaveBtn" onclick="saveKey()">Save</button>
       </div>
       <p class="api-hint">
-        Your key never leaves your browser. Get one at
-        <a href="https://console.anthropic.com/account/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
-        It is saved in <code style="font-size:10px;color:var(--gold-dim)">localStorage</code> so you only need to enter it once.
+        Leave blank if your deployment sets <code style="font-size:10px;color:var(--gold-dim)">NVIDIA_API_KEY</code> on the server (recommended).
+        Otherwise paste your key from
+        <a href="https://build.nvidia.com" target="_blank" rel="noopener">build.nvidia.com</a> — it is stored only in your browser's
+        <code style="font-size:10px;color:var(--gold-dim)">localStorage</code> and sent only to your own proxy.
       </p>
     </div>
 
@@ -659,7 +717,7 @@
     </div>
 
     <footer>
-      <p class="footer-text">JEWEL SHOT · AI Prompt Studio · Powered by Claude</p>
+      <p class="footer-text">JEWEL SHOT · AI Prompt Studio · Powered by NVIDIA Vision AI</p>
     </footer>
 
   </div>
@@ -683,18 +741,27 @@
       return MOODS.golden;
     }
 
+    // ── Config ────────────────────────────────────────────────────
+    // Same-origin serverless proxy (Vercel: /api/generate). The proxy forwards
+    // requests to NVIDIA because NVIDIA's API cannot be called directly from a browser.
+    const API_ENDPOINT = '/api/generate';
+    const MAX_B64 = 150000; // keep inline image under NVIDIA's ~180KB limit
+
     // ── State ─────────────────────────────────────────────────────
     let imageBase64 = null;
     let imageMime   = 'image/jpeg';
     let promptsData = [];
 
-    // ── API Key ───────────────────────────────────────────────────
+    // ── Init: restore saved key + model ───────────────────────────
     window.addEventListener('DOMContentLoaded', () => {
-      const saved = localStorage.getItem('js_api_key');
-      if (saved) {
-        document.getElementById('apiKeyInput').value = saved;
-        checkReady();
+      const savedKey = localStorage.getItem('js_api_key');
+      if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+      const savedModel = localStorage.getItem('js_model');
+      if (savedModel) {
+        const sel = document.getElementById('modelSelect');
+        if ([...sel.options].some(o => o.value === savedModel)) sel.value = savedModel;
       }
+      checkReady();
     });
 
     function saveKey() {
@@ -712,6 +779,14 @@
       return (document.getElementById('apiKeyInput').value.trim()
         || localStorage.getItem('js_api_key')
         || '');
+    }
+
+    function getModel() {
+      return document.getElementById('modelSelect').value;
+    }
+
+    function saveModel() {
+      localStorage.setItem('js_model', getModel());
     }
 
     // ── Upload ────────────────────────────────────────────────────
@@ -754,7 +829,6 @@
     }
 
     function processFile(file) {
-      imageMime = file.type || 'image/jpeg';
       const url = URL.createObjectURL(file);
       document.getElementById('previewImg').src = url;
       document.getElementById('uploadPlaceholder').style.display = 'none';
@@ -763,103 +837,91 @@
       document.getElementById('results').style.display = 'none';
       document.getElementById('errorBox').style.display = 'none';
       promptsData = [];
+      imageBase64 = null;
+      checkReady();
 
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        imageBase64 = ev.target.result.split(',')[1];
+      // Compress client-side so the inline image stays under NVIDIA's size limit.
+      compressImage(file).then(({ base64, mime }) => {
+        imageBase64 = base64;
+        imageMime = mime;
         checkReady();
-      };
-      reader.readAsDataURL(file);
+      }).catch(() => {
+        showError('Could not read that image. Try a JPG or PNG.');
+      });
+    }
+
+    // Downscale + re-encode to JPEG, stepping quality down until base64 < MAX_B64.
+    function compressImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        const objUrl = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(objUrl);
+          const maxDim = 1024;
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim) {
+            const scale = maxDim / Math.max(width, height);
+            width = Math.round(width * scale);
+            height = Math.round(height * scale);
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          let quality = 0.9;
+          let dataUrl = canvas.toDataURL('image/jpeg', quality);
+          while (dataUrl.length - dataUrl.indexOf(',') - 1 > MAX_B64 && quality > 0.3) {
+            quality -= 0.1;
+            dataUrl = canvas.toDataURL('image/jpeg', quality);
+          }
+          resolve({ base64: dataUrl.split(',')[1], mime: 'image/jpeg' });
+        };
+        img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('decode failed')); };
+        img.src = objUrl;
+      });
     }
 
     function checkReady() {
-      const ready = !!imageBase64 && !!getKey();
-      document.getElementById('generateBtn').disabled = !ready;
+      // Key is optional here — the server may supply NVIDIA_API_KEY itself.
+      document.getElementById('generateBtn').disabled = !imageBase64;
     }
 
     // ── Generate ──────────────────────────────────────────────────
-    const SYSTEM_PROMPT = `You are a world-class luxury jewelry photography director and AI prompt engineer.
-Your task: analyze the uploaded jewelry image and write exactly 6 hyper-detailed, cinematic prompts for AI image generators (GPT Image 2, Nano Banana Pro) that produce WOW-factor lifestyle shots clients will immediately want to buy.
-
-First, silently observe:
-- TYPE (ring, necklace, bracelet, earrings, pendant, etc.)
-- METAL (gold, rose gold, yellow gold, white gold, silver, etc. — note tone)
-- STONES (diamonds, rubies, emeralds, sapphires, pearls, no stones, etc.)
-- STYLE (minimalist, ornate, vintage, art deco, modern, delicate, bold, layered)
-- SCALE (dainty and delicate vs large statement piece)
-
-Then generate 6 prompts, one per scene/mood, each 90–140 words, ultra-specific to the ACTUAL piece in the image.
-
-Moods to cover (in this order):
-1. Golden – warm golden-hour lifestyle, person wearing the jewelry
-2. Dramatic – dark studio hero shot, product only
-3. Editorial – high-fashion editorial, model context
-4. Nature – organic textures: flowers, marble, sand, stone
-5. Story – cinematic emotional narrative moment
-6. Surreal – dreamlike, artistic, unexpected luxury setting
-
-CRITICAL RULES:
-- Reference the actual metal color, stone color/type, and style throughout every prompt
-- Every prompt MUST end with this exact sentence: "The jewelry must match the uploaded reference image EXACTLY — same design, same metal color, same stones, same proportions. Do not alter the piece in any way."
-- Respond ONLY with a valid JSON array. Zero preamble, zero markdown fences, zero explanation.
-
-JSON shape:
-[
-  {
-    "title": "3–5 word evocative title",
-    "mood": "one of: Golden / Dramatic / Editorial / Nature / Story / Surreal",
-    "bestFor": "one sentence on why this scene works for this specific piece",
-    "prompt": "full prompt text ending with the fidelity lock sentence"
-  }
-]`;
-
+    // The prompt engineering + NVIDIA call happen server-side in /api/generate.
     async function generate() {
-      const key = getKey();
-      if (!key) { showError('Please enter your Anthropic API key above.'); return; }
       if (!imageBase64) { showError('Please upload a jewelry image first.'); return; }
 
       setLoading(true);
       hideError();
       document.getElementById('results').style.display = 'none';
 
+      const headers = { 'Content-Type': 'application/json' };
+      const key = getKey();
+      if (key) headers['x-nvidia-api-key'] = key;
+
       try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const res = await fetch(API_ENDPOINT, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': key,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true'
-          },
+          headers,
           body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 3000,
-            system: SYSTEM_PROMPT,
-            messages: [{
-              role: 'user',
-              content: [
-                {
-                  type: 'image',
-                  source: { type: 'base64', media_type: imageMime, data: imageBase64 }
-                },
-                {
-                  type: 'text',
-                  text: 'Analyze this jewelry carefully and return the 6 tailored prompts as pure JSON only.'
-                }
-              ]
-            }]
+            model: getModel(),
+            imageBase64,
+            imageMime
           })
         });
 
+        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error?.message || `API error ${res.status}`);
+          throw new Error(data.error || `Request failed (${res.status}).`);
         }
-
-        const data = await res.json();
-        const raw  = data.content?.map(b => b.text || '').join('') || '';
-        const clean = raw.replace(/```json|```/g, '').trim();
-        promptsData = JSON.parse(clean);
+        if (!Array.isArray(data.prompts) || data.prompts.length === 0) {
+          throw new Error('No prompts were returned. Please try again.');
+        }
+        promptsData = data.prompts;
         renderCards(promptsData);
 
       } catch (err) {
