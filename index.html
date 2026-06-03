@@ -630,8 +630,8 @@
         <span class="api-label-badge">Free endpoints</span>
       </div>
       <select class="model-select" id="modelSelect" onchange="saveModel()">
-        <option value="meta/llama-3.2-90b-vision-instruct">Llama 3.2 90B Vision — best quality (default)</option>
-        <option value="meta/llama-3.2-11b-vision-instruct">Llama 3.2 11B Vision — faster</option>
+        <option value="meta/llama-3.2-11b-vision-instruct">Llama 3.2 11B Vision — fast &amp; reliable (default)</option>
+        <option value="meta/llama-3.2-90b-vision-instruct">Llama 3.2 90B Vision — highest quality (slower)</option>
         <option value="microsoft/phi-3.5-vision-instruct">Phi-3.5 Vision — lightweight</option>
       </select>
     </div>
@@ -745,7 +745,9 @@
     // Same-origin serverless proxy (Vercel: /api/generate). The proxy forwards
     // requests to NVIDIA because NVIDIA's API cannot be called directly from a browser.
     const API_ENDPOINT = '/api/generate';
-    const MAX_B64 = 150000; // keep inline image under NVIDIA's ~180KB limit
+    // Keep the inline image small: well under NVIDIA's ~180KB limit, and small enough
+    // that the vision model stays fast and does not time out on full-size phone photos.
+    const MAX_B64 = 90000;
 
     // ── State ─────────────────────────────────────────────────────
     let imageBase64 = null;
@@ -857,7 +859,7 @@
         const objUrl = URL.createObjectURL(file);
         img.onload = () => {
           URL.revokeObjectURL(objUrl);
-          const maxDim = 1024;
+          const maxDim = 768;
           let { width, height } = img;
           if (width > maxDim || height > maxDim) {
             const scale = maxDim / Math.max(width, height);

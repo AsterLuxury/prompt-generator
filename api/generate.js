@@ -13,6 +13,13 @@ const ALLOWED_MODELS = new Set([
   'microsoft/phi-3.5-vision-instruct',
 ]);
 
+// 11B is the default: it answers far faster than 90B (which can take minutes and
+// time out on full-size photos) while still producing strong vision-grounded prompts.
+const DEFAULT_MODEL = 'meta/llama-3.2-11b-vision-instruct';
+
+// Hard cap on how long we wait for NVIDIA before returning a clean 504.
+const REQUEST_TIMEOUT_MS = 55000;
+
 const SYSTEM_PROMPT = `You are a world-class luxury jewelry photography director and AI prompt engineer for high-end brands.
 Your task: look closely at the uploaded jewelry image and write EXACTLY 6 hyper-detailed, cinematic prompts for AI image generators (GPT Image / GPT Image 2 and Nano Banana Pro) that produce scroll-stopping, WOW-factor shots that make a client instantly think "I want it".
 
@@ -76,23 +83,62 @@ function readBody(req) {
   });
 }
 
-// Pull a JSON array out of the model output even if it adds stray text/fences.
+// Pull prompt objects out of the model output even if it adds stray text/fences,
+// returns a bare object instead of an array, or separates objects with commas or
+// newlines instead of wrapping them in [ ]. We scan for every balanced {...} block
+// and keep the ones that parse into a prompt-shaped object.
 function extractPrompts(text) {
   if (!text) return null;
-  let clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const clean = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+
+  // 1) Happy path: a valid JSON array.
   try {
     const parsed = JSON.parse(clean);
-    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed) && parsed.length) return parsed;
+    if (parsed && typeof parsed === 'object' && parsed.prompt) return [parsed];
   } catch { /* fall through */ }
+
+  // 2) Try the substring between the first [ and last ].
   const start = clean.indexOf('[');
   const end = clean.lastIndexOf(']');
-  if (start !== -1 && end !== -1 && end > start) {
+  if (start !== -1 && end > start) {
     try {
       const parsed = JSON.parse(clean.slice(start, end + 1));
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length) return parsed;
     } catch { /* fall through */ }
   }
-  return null;
+
+  // 3) Salvage every balanced top-level {...} object and parse each one.
+  const objects = [];
+  let depth = 0;
+  let objStart = -1;
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === '{') { if (depth === 0) objStart = i; depth++; }
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        const chunk = clean.slice(objStart, i + 1);
+        try {
+          const obj = JSON.parse(chunk);
+          if (obj && typeof obj === 'object' && (obj.prompt || obj.mood || obj.title)) {
+            objects.push(obj);
+          }
+        } catch { /* skip malformed chunk */ }
+        objStart = -1;
+      }
+    }
+  }
+  return objects.length ? objects : null;
 }
 
 module.exports = async function handler(req, res) {
@@ -124,7 +170,7 @@ module.exports = async function handler(req, res) {
 
   const model = body.model && ALLOWED_MODELS.has(body.model)
     ? body.model
-    : 'meta/llama-3.2-90b-vision-instruct';
+    : DEFAULT_MODEL;
 
   const imageBase64 = body.imageBase64;
   const imageMime = body.imageMime || 'image/jpeg';
@@ -149,11 +195,16 @@ module.exports = async function handler(req, res) {
         ],
       },
     ],
-    max_tokens: 3000,
-    temperature: 0.8,
+    max_tokens: 4096,
+    temperature: 0.7,
     top_p: 0.9,
     stream: false,
   };
+
+  // Abort if NVIDIA is taking too long so the user gets a clear error instead of a
+  // 3-minute hang. Vercel's function maxDuration (vercel.json) is the hard ceiling.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
   let nvRes;
   try {
@@ -165,10 +216,18 @@ module.exports = async function handler(req, res) {
         Accept: 'application/json',
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
   } catch (err) {
+    clearTimeout(timeout);
+    if (err && err.name === 'AbortError') {
+      return sendJson(res, 504, {
+        error: 'NVIDIA took too long to respond. Try the faster 11B model, or try again.',
+      });
+    }
     return sendJson(res, 502, { error: `Could not reach NVIDIA API: ${err.message}` });
   }
+  clearTimeout(timeout);
 
   const text = await nvRes.text();
   let data;
